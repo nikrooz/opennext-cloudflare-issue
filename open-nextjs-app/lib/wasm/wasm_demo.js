@@ -1,3 +1,7 @@
+/**
+ * Copied from ../../../wasm-demo/pkg/wasm_demo.js
+ * with the recommended patching from https://developers.cloudflare.com/workers/languages/rust/#javascript-plumbing-wasm-bindgen
+ */
 import * as imports from "./wasm_demo_bg.js";
 
 // switch between both syntax for node and for workerd
