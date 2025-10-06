@@ -22,6 +22,11 @@ This occurs because webpack's `asyncWebAssembly` generates code that calls `fs.r
 └── open-nextjs-app/        # ❌ Fails - OpenNext Cloudflare
 ```
 
+See individual READMEs for details:
+- [wasm-demo/README.md](./wasm-demo/README.md) - How the WASM module is built
+- [cloudflare-worker/README.md](./cloudflare-worker/README.md) - Running the standalone worker
+- [nextjs-app/README.md](./nextjs-app/README.md) - Running Next.js with WASM
+- [open-nextjs-app/README.md](./open-nextjs-app/README.md) - The failing OpenNext example
 
 ## Reproduction Steps
 
@@ -36,7 +41,7 @@ cd opennext-cloudflare-issue
 
 **1. Test Cloudflare Worker:**
 ```bash
-cd cloudflare-worker-app
+cd cloudflare-worker
 npm install
 npm run dev
 curl http://localhost:8787/
@@ -70,13 +75,39 @@ OpenNext Cloudflare's bundling process transforms the code in a way that breaks 
 3. Cloudflare Workers don't have `fs` - they use unenv polyfills that throw "not implemented" errors
 4. Even with copy plugins and workarounds, the fundamental `fs.readFile()` call fails
 
+### Why the Copy Plugin is Needed
+
+Both `nextjs-app` and `open-nextjs-app` require a webpack plugin to manually copy WASM files:
+
+```typescript
+config.plugins.push({
+  apply(compiler: Compiler) {
+    compiler.hooks.afterEmit.tap('CopyWasmFiles', (compilation) => {
+      // Copies .wasm files from chunks/ to static/wasm/
+    });
+  },
+});
+```
+
+**Without this plugin, the build fails with:**
+
+```
+Error: ENOENT: no such file or directory, open '.next/server/static/wasm/[hash].wasm'
+```
+
+This error occurs during the "Collecting page data" phase because webpack emits WASM files to the wrong location. The copy plugin is a workaround to move them where Next.js expects them.
+
+**However**, even with the copy plugin:
+- ✅ **Next.js (Node.js)**: Works because Node.js has real `fs.readFile()` support
+- ❌ **OpenNext Cloudflare**: Fails because Cloudflare Workers can't use `fs.readFile()` at runtime
+
 ## What Works vs What Doesn't
 
 | Environment | WASM Support | Notes |
 |------------|--------------|-------|
 | Cloudflare Workers (standalone) | ✅ Works | Native ES module imports |
-| Next.js  | ✅ Works | With copy plugin workaround |
-| OpenNext Cloudflare | ❌ Fails | Bundling generates incompatible code |
+| Next.js  | ✅ Works | Requires copy plugin workaround |
+| OpenNext Cloudflare | ❌ Fails | Runtime fs.readFile error |
 
 ## Expected Behavior
 
